@@ -1,0 +1,30 @@
+{
+  "name": "site-speed-checker",
+  "version": "1.0.0",
+  "description": "Аудит скорости загрузки страниц: десктоп и мобильный, свои и внешние скрипты, рекомендации",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crabpipl/site-speed-checker.git"
+  },
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "audit": "node check.js --both",
+    "audit:desktop": "node check.js",
+    "audit:mobile": "node check.js --mobile",
+    "pages": "node check.js --list",
+    "schedule:on": "node schedule.js on",
+    "schedule:off": "node schedule.js off",
+    "schedule:status": "node schedule.js status",
+    "schedule:run": "node schedule.js run",
+    "audit:test": "node check.js pages-test.txt --both --test"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.64.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}
