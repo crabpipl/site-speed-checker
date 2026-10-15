@@ -8,3 +8,7 @@ reports/
 crux-key.txt
 # Личный план разработки для Claude Code — только на этом компьютере
 CLAUDE.local.md
+# Личные списки страниц и настройки — у каждого свои; в репозитории — образцы
+# pages.example.txt и settings.example.txt, из них файлы создаются при первом запуске
+pages.txt
+settings.txt

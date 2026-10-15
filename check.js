@@ -16,7 +16,7 @@ import {
 import { analyzePage, summarizeServices, fmtMs, kb, isError } from './lib/analyze.js';
 import { renderReport } from './lib/report.js';
 import { renderSummary } from './lib/summary.js';
-import { loadSettings, summaryEnabled, tasksEnabled, competitorsEnabled } from './lib/settings.js';
+import { loadSettings, summaryEnabled, tasksEnabled, competitorsEnabled, ensureFromExample } from './lib/settings.js';
 import { loadCompetitors, groupsFor, rivalResult, compareGroup, hostOf, prodPair, prodDigest } from './lib/competitors.js';
 import { buildTasks, tasksCsv, tasksHtml } from './lib/tasks.js';
 import { Progress, WEIGHT } from './lib/progress.js';
@@ -92,6 +92,10 @@ if (args.includes('--list')) {
 
 // pages.txt: одна строка — один полный URL; # — комментарий; пустые строки пропускаются
 function loadPagesTxt(path) {
+  // Первый запуск: pages.txt создаётся из образца pages.example.txt
+  if (ensureFromExample(path)) {
+    console.log(`Создан файл ${basename(path)} из образца. Впишите в него адреса своих страниц (по одному в строке) и запустите проверку снова:\n  ${path}`);
+  }
   let text;
   try { text = readFileSync(path, 'utf8'); } catch {
     console.error(`Не найден файл со списком страниц: ${path}`);
