@@ -55,7 +55,8 @@ const check = args.includes('--check');
 const opts = { timeout: Number(flag('timeout') ?? 45000), noOrder: check || args.includes('--no-order'), check };
 
 log(`\n${color('1', `Тест оформления заказа: ${siteName}`)} · ${profile.label}`);
-log(`Товар: ${sc.product}`);
+log(sc.products.length > 1 ? `Товары (${sc.products.length}):\n${sc.products.map((u) => `  • ${u}`).join('\n')}` : `Товар: ${sc.product}`);
+if (sc.cleanCart) log('Товары, которые уже лежат в корзине аккаунта, будут удалены из неё — в заказ попадут только товары из checkout.txt.');
 log(`Получение: «${actionText(sc.delivery)}»${sc.store ? `, магазин «${actionText(sc.store)}»` : ''} · оплата: «${actionText(sc.payment)}»`);
 log(check
   ? color('36', 'Проверка сценария (--check): без входа в аккаунт и без заказа — агент проверит, что кнопки из настроек находятся на сайте.')
@@ -82,7 +83,7 @@ for (let i = 2; existsSync(outDir); i++) outDir = `${REPORTS}/${siteName}/${STAM
 await mkdir(outDir, { recursive: true });
 const data = {
   kind: 'checkout', site: siteName, device, profile: profile.label, startedAt, finishedAt: new Date(),
-  product: sc.product, productTitle: result.productTitle, login: result.method,
+  product: sc.product, products: result.products ?? sc.products.map((url) => ({ url, title: '' })), removed: result.removed ?? [], productTitle: result.productTitle, login: result.method,
   delivery: actionText(sc.delivery), store: sc.store ? actionText(sc.store) : '', payment: actionText(sc.payment), placeOrder: sc.placeOrder,
   order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes,
   steps: result.steps,
@@ -97,7 +98,7 @@ log(`\n${line}`);
 if (result.error) log(color('1;33', `⚠ Тест прерван на шаге «${result.stoppedAt}»: ${result.error}`));
 else if (result.stoppedAt === 'остановлено вручную') log(color('1;33', '⏹ Тест остановлен вручную'));
 else log(color('1;32', '✅ Тест оформления завершён'));
-const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста)/.test(s.name) && !s.error);
+const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста|Удаление других товаров)/.test(s.name) && !s.error);
 if (flow.length) {
   const slow = [...flow].sort((a, b) => b.dur - a.dur)[0];
   log(`   От карточки товара до ${opts.noOrder ? 'выбора оплаты' : 'заказа'}: ${fmt(flow.reduce((a, s) => a + s.dur, 0))}; самый медленный шаг — «${slow.name}» (${fmt(slow.dur)})`);
@@ -116,7 +117,7 @@ async function findPrevious(site, stamp) {
       try {
         const x = JSON.parse(await readFile(`${REPORTS}/${site}/${d}/checkout/data.json`, 'utf8'));
         // Сравниваем только с тестом на том же устройстве, где оформление дошло хотя бы до карточки товара
-        if (x.device === device && x.steps?.some((s) => s.name === 'Карточка товара' && !s.error)) return x;
+        if (x.device === device && x.steps?.some((s) => s.name.startsWith('Карточка товара') && !s.error)) return x;
       } catch {}
     }
   } catch {}
