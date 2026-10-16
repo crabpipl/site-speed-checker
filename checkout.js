@@ -98,7 +98,7 @@ log(`\n${line}`);
 if (result.error) log(color('1;33', `⚠ Тест прерван на шаге «${result.stoppedAt}»: ${result.error}`));
 else if (result.stoppedAt === 'остановлено вручную') log(color('1;33', '⏹ Тест остановлен вручную'));
 else log(color('1;32', '✅ Тест оформления завершён'));
-const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста|Удаление других товаров)/.test(s.name) && !s.error);
+const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста|Удаление других товаров|Карточка товара.* — первый заход)/.test(s.name) && !s.error);
 if (flow.length) {
   const slow = [...flow].sort((a, b) => b.dur - a.dur)[0];
   log(`   От карточки товара до ${opts.noOrder ? 'выбора оплаты' : 'заказа'}: ${fmt(flow.reduce((a, s) => a + s.dur, 0))}; самый медленный шаг — «${slow.name}» (${fmt(slow.dur)})`);
