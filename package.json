@@ -16,7 +16,8 @@
     "schedule:off": "node schedule.js off",
     "schedule:status": "node schedule.js status",
     "schedule:run": "node schedule.js run",
-    "audit:test": "node check.js pages-test.txt --both --test"
+    "audit:test": "node check.js pages-test.txt --both --test",
+    "audit:checkout": "node checkout.js"
   },
   "license": "MIT",
   "type": "module",
