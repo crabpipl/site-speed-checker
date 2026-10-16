@@ -101,7 +101,8 @@ else log(color('1;32', '✅ Тест оформления завершён'));
 const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста|Удаление других товаров|Карточка товара.* — первый заход)/.test(s.name) && !s.error);
 if (flow.length) {
   const slow = [...flow].sort((a, b) => b.dur - a.dur)[0];
-  log(`   От карточки товара до ${opts.noOrder ? 'выбора оплаты' : 'заказа'}: ${fmt(flow.reduce((a, s) => a + s.dur, 0))}; самый медленный шаг — «${slow.name}» (${fmt(slow.dur)})`);
+  const tot = flow.reduce((a, s) => a + s.dur, 0), totFull = flow.reduce((a, s) => a + (s.full ?? s.dur), 0);
+  log(`   От карточки товара до ${opts.noOrder ? 'выбора оплаты' : 'заказа'}: ${fmt(tot)} до готового контента${totFull - tot >= 1000 ? ` (с полной загрузкой ${fmt(totFull)})` : ''}; самый медленный шаг — «${slow.name}» (${fmt(slow.dur)})`);
 }
 if (result.order?.confirmed) log(color('1;33', `   Заказ ${result.order.number ? `№ ${result.order.number} ` : ''}создан — не забудьте отменить его.`));
 log(`   Рекомендаций: ${data.recs.length}`);
