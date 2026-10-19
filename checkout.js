@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, basename } from 'node:path';
 import { PROFILES } from './lib/collect.js';
-import { loadCheckout, scenarioOf, actionText } from './lib/checkout-config.js';
+import { loadCheckout, scenarioOf, actionText, KEY_OF } from './lib/checkout-config.js';
 import { runCheckout, Prompt, Secrets, fmt } from './lib/checkout.js';
 import { renderCheckout, checkoutRecs } from './lib/report-checkout.js';
 import { ensureFromExample } from './lib/settings.js';
@@ -54,6 +54,12 @@ if (args.includes('--check') && (!raw.delivery || !raw.payment)) {
   log(color('36', 'Не указаны «получение» и/или «оплата» — агент дойдёт до этих шагов и покажет варианты, которые есть на странице.'));
 }
 const sc = scenarioOf(raw);
+// Откуда взяты настройки: общая секция [все сайты] и «основа = …»
+if (Object.keys(raw.inherited || {}).length) {
+  const by = {};
+  for (const [f, src] of Object.entries(raw.inherited)) (by[src] ??= []).push(KEY_OF[f] || f);
+  log(color('36', `Настройки из других секций: ${Object.entries(by).map(([src, keys]) => `[${src}] — ${keys.join(', ')}`).join('; ')}`));
+}
 const device = args.includes('--desktop') ? 'desktop' : args.includes('--mobile') ? 'mobile' : sc.device;
 const profile = PROFILES[device];
 // --check: проверка сценария гостем — без входа и без заказа (проверить, что кнопки из checkout.txt находятся на сайте)
