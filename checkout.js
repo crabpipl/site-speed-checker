@@ -1,5 +1,5 @@
 // Тест скорости оформления заказа с входом по коду из SMS или письма.
-// Запуск: node checkout.js [checkout.txt] [--site=shop.example.com] [--mobile | --desktop] [--check | --no-order] [--headless] [--timeout=45000]
+// Запуск: node checkout.js [checkout.txt] [--site=shop.example.com] [--mobile | --desktop] [--check | --no-order | --record] [--headless] [--timeout=45000]
 // ВНИМАНИЕ: без --no-order создаётся НАСТОЯЩИЙ заказ — отмените его после теста.
 import { chromium } from 'playwright';
 import { writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
@@ -11,6 +11,7 @@ import { loadCheckout, scenarioOf, actionText, KEY_OF } from './lib/checkout-con
 import { runCheckout, Prompt, Secrets, fmt } from './lib/checkout.js';
 import { renderCheckout, checkoutRecs } from './lib/report-checkout.js';
 import { ensureFromExample } from './lib/settings.js';
+import { runRecord, sectionText, saveSection } from './lib/checkout-record.js';
 
 const args = process.argv.slice(2);
 const PROJECT = dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,45 @@ const color = (code, s) => (process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : 
 const log = (s) => console.log(s);
 
 const configPath = resolve(args.find((x) => !x.startsWith('--')) ?? `${PROJECT}/checkout.txt`);
+
+// --record: запись сценария — человек проходит оформление в открытом браузере, агент запоминает нажатия
+if (args.includes('--record')) {
+  const created = ensureFromExample(configPath);
+  const { sites } = loadCheckout(configPath);
+  const prompt = new Prompt();
+  let site = flag('site')?.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  while (!site) site = (await prompt.ask('Адрес сайта, например shop.example.com: ').catch(() => process.exit(1))).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  const device = args.includes('--desktop') ? 'desktop' : args.includes('--mobile') ? 'mobile' : sites[site]?.device || 'mobile';
+  log(`\n${color('1', `Запись сценария оформления: ${site}`)} · ${PROFILES[device].label}`);
+  log('Откроется окно браузера. Проходите оформление как покупатель, а в Терминале нажимайте Enter после каждого шага.');
+  log('Записываются только нажатия и адрес товара — то, что вы вводите (телефон, код), не записывается. Заказ не создаётся.');
+  if (created) log(`Создан файл ${basename(configPath)} из образца — секция сайта будет добавлена в него.`);
+  // Окно браузера всегда видно: по нему человек и проходит оформление
+  const browser = await chromium.launch({ headless: false, handleSIGINT: false });
+  let rec;
+  try {
+    rec = await runRecord({ browser, profile: PROFILES[device], startUrl: `https://${site}/`, prompt, log, color });
+  } catch (e) {
+    await browser.close().catch(() => {});
+    log(color('33', `\nЗапись остановлена: ${e.message.split('\n')[0]}`));
+    process.exit(1);
+  }
+  await browser.close().catch(() => {});
+  const text = sectionText(site, rec, device);
+  log(`\n${color('1', 'Записанная секция:')}\n\n${text}`);
+  const exists = !!sites[site];
+  const a = (await prompt.ask(exists ? `Заменить секцию [${site}] в ${basename(configPath)} этой записью? (Д/н): ` : `Добавить секцию в ${basename(configPath)}? (Д/н): `).catch(() => 'н')).trim().toLowerCase();
+  if (/^(н|n|нет)/.test(a)) {
+    log('Не сохранено. Секцию выше можно скопировать в checkout.txt вручную.');
+  } else {
+    const r = saveSection(configPath, site, text);
+    log(color('32', `✓ ${r.replaced ? 'Секция заменена' : 'Секция добавлена'}: ${configPath}${r.backup ? `\n  Копия прежнего файла: ${r.backup}` : ''}`));
+    log('Проверьте сценарий без входа и без заказа:');
+    log(`  npm run audit:checkout -- --check --site=${site}`);
+  }
+  process.exit(0);
+}
+
 if (ensureFromExample(configPath)) {
   log(`Создан файл ${basename(configPath)} из образца. Впишите в него товар, способ получения и оплаты для своего сайта и запустите тест снова:\n  ${configPath}`);
   process.exit(0);
