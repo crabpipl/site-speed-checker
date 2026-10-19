@@ -43,9 +43,15 @@ while (!siteName) {
   siteName = names[Number(a) - 1];
 }
 const raw = sites[siteName];
-if (!raw.product || !raw.delivery || !raw.payment) {
-  console.error(`В секции [${siteName}] не хватает настроек (товар, получение, оплата) — см. предупреждения выше.`);
+// В режиме проверки (--check) для нового сайта достаточно товара: агент дойдёт до выбора способа получения
+// и покажет варианты, которые есть на странице, — готовыми строками для checkout.txt
+if (!raw.product || (!args.includes('--check') && (!raw.delivery || !raw.payment))) {
+  console.error(`В секции [${siteName}] не хватает настроек (${args.includes('--check') ? 'товар' : 'товар, получение, оплата'}) — см. предупреждения выше.` +
+    (args.includes('--check') ? '' : '\nЧтобы подобрать тексты «получение» и «оплата», запустите проверку сценария с --check — агент подскажет варианты с сайта.'));
   process.exit(1);
+}
+if (args.includes('--check') && (!raw.delivery || !raw.payment)) {
+  log(color('36', 'Не указаны «получение» и/или «оплата» — агент дойдёт до этих шагов и покажет варианты, которые есть на странице.'));
 }
 const sc = scenarioOf(raw);
 const device = args.includes('--desktop') ? 'desktop' : args.includes('--mobile') ? 'mobile' : sc.device;
@@ -57,7 +63,7 @@ const opts = { timeout: Number(flag('timeout') ?? 45000), noOrder: check || args
 log(`\n${color('1', `Тест оформления заказа: ${siteName}`)} · ${profile.label}`);
 log(sc.products.length > 1 ? `Товары (${sc.products.length}):\n${sc.products.map((u) => `  • ${u}`).join('\n')}` : `Товар: ${sc.product}`);
 if (sc.cleanCart) log('Товары, которые уже лежат в корзине аккаунта, будут удалены из неё — в заказ попадут только товары из checkout.txt.');
-log(`Получение: «${actionText(sc.delivery)}»${sc.store ? `, магазин «${actionText(sc.store)}»` : ''} · оплата: «${actionText(sc.payment)}»`);
+log(`Получение: ${sc.delivery?.length ? `«${actionText(sc.delivery)}»` : 'не указано'}${sc.store ? `, магазин «${actionText(sc.store)}»` : ''} · оплата: ${sc.payment?.length ? `«${actionText(sc.payment)}»` : 'не указана'}`);
 log(check
   ? color('36', 'Проверка сценария (--check): без входа в аккаунт и без заказа — агент проверит, что кнопки из настроек находятся на сайте.')
   : opts.noOrder
@@ -85,7 +91,7 @@ const data = {
   kind: 'checkout', site: siteName, device, profile: profile.label, startedAt, finishedAt: new Date(),
   product: sc.product, products: result.products ?? sc.products.map((url) => ({ url, title: '' })), removed: result.removed ?? [], productTitle: result.productTitle, login: result.method,
   delivery: actionText(sc.delivery), store: sc.store ? actionText(sc.store) : '', payment: actionText(sc.payment), placeOrder: sc.placeOrder,
-  order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes,
+  order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes, popups: (result.popups || []).map(({ kind, button, text }) => ({ kind, button, text })),
   steps: result.steps,
 };
 data.recs = checkoutRecs(data.steps, data.order);
