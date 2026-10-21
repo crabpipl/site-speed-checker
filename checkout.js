@@ -10,6 +10,7 @@ import { PROFILES } from './lib/collect.js';
 import { loadCheckout, scenarioOf, actionText, KEY_OF, siteName as sectionName, domainOf } from './lib/checkout-config.js';
 import { runCheckout, Prompt, Secrets, fmt } from './lib/checkout.js';
 import { renderCheckout, checkoutRecs } from './lib/report-checkout.js';
+import { checkoutTasks, checkoutTasksHtml, checkoutTasksCsv } from './lib/checkout-tasks.js';
 import { ensureFromExample } from './lib/settings.js';
 import { runRecord, sectionText, saveSection } from './lib/checkout-record.js';
 
@@ -150,6 +151,11 @@ data.recs = checkoutRecs(data.steps, data.order);
 const prev = await findPrevious(siteName, STAMP);
 await writeFile(`${outDir}/data.json`, JSON.stringify(data));
 await writeFile(`${outDir}/checkout_report.html`, renderCheckout(data, prev));
+// Задачи для разработки: что исправить, где, что сделать, когда готово
+const tasks = checkoutTasks(data);
+const tctx = { site: siteName, report: 'checkout_report.html', date: startedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), device: profile.label, kind: data.stoppedAt };
+await writeFile(`${outDir}/tasks.html`, checkoutTasksHtml(tasks, tctx));
+await writeFile(`${outDir}/tasks.csv`, checkoutTasksCsv(tasks, tctx));
 
 const line = '─'.repeat(Math.min(process.stdout.columns || 70, 70));
 log(`\n${line}`);
@@ -163,8 +169,9 @@ if (flow.length) {
   log(`   От карточки товара до ${opts.noOrder ? 'выбора оплаты' : 'заказа'}: ${fmt(tot)} до готового контента${totFull - tot >= 1000 ? ` (с полной загрузкой ${fmt(totFull)})` : ''}; самый медленный шаг — «${slow.name}» (${fmt(slow.dur)})`);
 }
 if (result.order?.confirmed) log(color('1;33', `   Заказ ${result.order.number ? `№ ${result.order.number} ` : ''}создан — не забудьте отменить его.`));
-log(`   Рекомендаций: ${data.recs.length}`);
+log(`   Рекомендаций: ${data.recs.length} · задач для разработки: ${tasks.length}`);
 log(`   Отчёт: ${outDir}/checkout_report.html`);
+log(`   Задачи: ${outDir}/tasks.html`);
 log(line);
 process.exit(result.error ? 2 : 0);
 
