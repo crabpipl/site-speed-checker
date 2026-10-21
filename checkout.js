@@ -94,6 +94,9 @@ if (args.includes('--check') && (!raw.delivery || !raw.payment)) {
   log(color('36', 'Не указаны «получение» и/или «оплата» — агент дойдёт до этих шагов и покажет варианты, которые есть на странице.'));
 }
 const sc = scenarioOf(raw);
+// Один тест — один способ получения: при адресе доставки строки магазина не используются
+const storeKeys = ['store', 'storeList', 'storeConfirm'].filter((k) => raw[k] && !raw.inherited?.[k]);
+if (raw.address && storeKeys.length) log(color('33', `⚠ В секции [${siteName}] есть и «адрес доставки», и строки самовывоза (${storeKeys.map((k) => KEY_OF[k]).join(', ')}). Проверяется доставка курьером, строки магазина не используются. Чтобы проверить самовывоз — уберите «адрес доставки».`));
 // Откуда взяты настройки: общая секция [все сайты] и «основа = …»
 if (Object.keys(raw.inherited || {}).length) {
   const by = {};
