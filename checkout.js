@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, basename } from 'node:path';
 import { PROFILES } from './lib/collect.js';
-import { loadCheckout, scenarioOf, actionText, KEY_OF } from './lib/checkout-config.js';
+import { loadCheckout, scenarioOf, actionText, KEY_OF, siteName as sectionName, domainOf } from './lib/checkout-config.js';
 import { runCheckout, Prompt, Secrets, fmt } from './lib/checkout.js';
 import { renderCheckout, checkoutRecs } from './lib/report-checkout.js';
 import { ensureFromExample } from './lib/settings.js';
@@ -74,7 +74,7 @@ const names = Object.keys(sites);
 if (!names.length) { console.error(`В ${basename(configPath)} нет ни одного сайта. Добавьте секцию [сайт] — образец в checkout.example.txt.`); process.exit(1); }
 
 const prompt = new Prompt();
-let siteName = flag('site')?.toLowerCase().replace(/^www\./, '');
+let siteName = flag('site') ? sectionName(flag('site')) : undefined;
 if (siteName && !sites[siteName]) { console.error(`Сайта «${siteName}» нет в ${basename(configPath)}. Есть: ${names.join(', ')}`); process.exit(1); }
 if (!siteName && names.length === 1) siteName = names[0];
 while (!siteName) {
@@ -109,7 +109,7 @@ const opts = { timeout: Number(flag('timeout') ?? 45000), noOrder: check || args
 log(`\n${color('1', `Тест оформления заказа: ${siteName}`)} · ${profile.label}`);
 log(sc.products.length > 1 ? `Товары (${sc.products.length}):\n${sc.products.map((u) => `  • ${u}`).join('\n')}` : `Товар: ${sc.product}`);
 if (sc.cleanCart) log('Товары, которые уже лежат в корзине аккаунта, будут удалены из неё — в заказ попадут только товары из checkout.txt.');
-log(`Получение: ${sc.delivery?.length ? `«${actionText(sc.delivery)}»` : 'не указано'}${sc.store ? `, магазин «${actionText(sc.store)}»` : ''} · оплата: ${sc.payment?.length ? `«${actionText(sc.payment)}»` : 'не указана'}`);
+log(`Получение: ${sc.delivery?.length ? `«${actionText(sc.delivery)}»` : 'не указано'}${sc.address ? `, адрес «${sc.address}»` : sc.store ? `, магазин «${actionText(sc.store)}»` : ''} · оплата: ${sc.payment?.length ? `«${actionText(sc.payment)}»` : 'не указана'}`);
 log(check
   ? color('36', 'Проверка сценария (--check): без входа в аккаунт и без заказа — агент проверит, что кнопки из настроек находятся на сайте.')
   : opts.noOrder
@@ -118,6 +118,7 @@ log(check
 log('Остановить тест в любой момент: Ctrl+C (агент выйдет из аккаунта и закроет браузер).\n');
 
 const secrets = new Secrets();
+secrets.add(sc.recipient);
 const startedAt = new Date();
 // Окно браузера по умолчанию видно: можно следить за тестом и, если сайт покажет капчу, пройти её самому
 const browser = await chromium.launch({ headless: args.includes('--headless'), handleSIGINT: false });
@@ -130,13 +131,15 @@ try {
 }
 
 // Два теста в одну минуту не должны затирать друг друга: вторая папка получает суффикс _2, _3…
-let outDir = `${REPORTS}/${siteName}/${STAMP}/checkout`;
-for (let i = 2; existsSync(outDir); i++) outDir = `${REPORTS}/${siteName}/${STAMP}_${i}/checkout`;
+// Отчёты всех сценариев сайта ([сайт], [сайт: курьер]) — в папке сайта
+const domain = domainOf(siteName);
+let outDir = `${REPORTS}/${domain}/${STAMP}/checkout`;
+for (let i = 2; existsSync(outDir); i++) outDir = `${REPORTS}/${domain}/${STAMP}_${i}/checkout`;
 await mkdir(outDir, { recursive: true });
 const data = {
   kind: 'checkout', site: siteName, device, profile: profile.label, startedAt, finishedAt: new Date(),
   product: sc.product, products: result.products ?? sc.products.map((url) => ({ url, title: '' })), removed: result.removed ?? [], productTitle: result.productTitle, login: result.method,
-  delivery: actionText(sc.delivery), store: sc.store ? actionText(sc.store) : '', payment: actionText(sc.payment), placeOrder: sc.placeOrder,
+  delivery: actionText(sc.delivery), store: sc.store && !sc.address ? actionText(sc.store) : '', address: sc.address || '', payment: actionText(sc.payment), placeOrder: sc.placeOrder,
   order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes, popups: (result.popups || []).map(({ kind, button, text }) => ({ kind, button, text })),
   steps: result.steps,
 };
@@ -165,12 +168,13 @@ process.exit(result.error ? 2 : 0);
 // Прошлый тест оформления того же сайта — для сравнения шагов
 async function findPrevious(site, stamp) {
   try {
-    const dirs = (await readdir(`${REPORTS}/${site}`)).filter((x) => x < stamp).sort().reverse();
+    const dirs = (await readdir(`${REPORTS}/${domainOf(site)}`)).filter((x) => x < stamp).sort().reverse();
     for (const d of dirs) {
       try {
-        const x = JSON.parse(await readFile(`${REPORTS}/${site}/${d}/checkout/data.json`, 'utf8'));
-        // Сравниваем только с тестом на том же устройстве, где оформление дошло хотя бы до карточки товара
-        if (x.device === device && x.steps?.some((s) => s.name.startsWith('Карточка товара') && !s.error)) return x;
+        const x = JSON.parse(await readFile(`${REPORTS}/${domainOf(site)}/${d}/checkout/data.json`, 'utf8'));
+        // Сравниваем только с тестом того же сценария ([сайт] или [сайт: курьер]) на том же устройстве,
+        // где оформление дошло хотя бы до карточки товара
+        if (x.site === site && x.device === device && x.steps?.some((s) => s.name.startsWith('Карточка товара') && !s.error)) return x;
       } catch {}
     }
   } catch {}
