@@ -771,10 +771,18 @@ cd ~/Documents/site-speed-checker && npm run audit:checkout -- --check
 
 Агент проходит все шаги гостем. Он проверяет, что форма входа открывается, и нажимает всё до кнопки «Оформить заказ», но саму её не нажимает. Если какой-то кнопки нет, в Терминале будет написано, на каком шаге и что поправить в `checkout.txt`.
 
-**3. Запустите тест с заказом:**
+**3. Проверьте со входом, но без заказа** — агент входит по коду и проходит все шаги до кнопки «Оформить заказ», но саму её не нажимает:
 
 ```bash
-cd ~/Documents/site-speed-checker && npm run audit:checkout
+cd ~/Documents/site-speed-checker && npm run audit:checkout -- --site=shop.example.com --no-order
+```
+
+`shop.example.com` — имя секции сайта из `checkout.txt`. Добавленные товары останутся в корзине вашего аккаунта.
+
+**4. Запустите тест с заказом** — та же команда без `--no-order`:
+
+```bash
+cd ~/Documents/site-speed-checker && npm run audit:checkout -- --site=shop.example.com
 ```
 
 Откроется окно браузера, за тестом можно следить. Дальше:
