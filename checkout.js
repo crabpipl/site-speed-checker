@@ -9,8 +9,8 @@ import { dirname, resolve, basename } from 'node:path';
 import { PROFILES } from './lib/collect.js';
 import { loadCheckout, scenarioOf, actionText, KEY_OF, siteName as sectionName, domainOf } from './lib/checkout-config.js';
 import { runCheckout, Prompt, Secrets, fmt } from './lib/checkout.js';
-import { renderCheckout, checkoutRecs } from './lib/report-checkout.js';
-import { checkoutTasks, checkoutTasksHtml, checkoutTasksCsv } from './lib/checkout-tasks.js';
+import { renderCheckout, checkoutRecs, LOGIN_STEPS, markLegacy } from './lib/report-checkout.js';
+import { checkoutTasks, checkoutTasksHtml, checkoutTasksCsv, conditionsOf } from './lib/checkout-tasks.js';
 import { ensureFromExample } from './lib/settings.js';
 import { runRecord, sectionText, saveSection } from './lib/checkout-record.js';
 
@@ -25,6 +25,21 @@ const color = (code, s) => (process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : 
 const log = (s) => console.log(s);
 
 const configPath = resolve(args.find((x) => !x.startsWith('--')) ?? `${PROJECT}/checkout.txt`);
+
+// --rebuild=<папка отчёта>: пересобрать checkout_report.html и задачи по сохранённому data.json (текущей версией агента)
+if (flag('rebuild')) {
+  const dir = resolve(flag('rebuild'));
+  const d = markLegacy(JSON.parse(await readFile(`${dir}/data.json`, 'utf8')));
+  d.recs = checkoutRecs(d.steps, d.order);
+  await writeFile(`${dir}/checkout_report.html`, renderCheckout(d, null));
+  const t = checkoutTasks(d);
+  const ctx = { site: d.site, report: 'checkout_report.html', date: new Date(d.startedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), device: d.profile, kind: d.stoppedAt, conditions: d.conditions };
+  await writeFile(`${dir}/tasks.html`, checkoutTasksHtml(t, ctx));
+  await writeFile(`${dir}/tasks.csv`, checkoutTasksCsv(t, ctx));
+  const bad = d.steps.filter((s) => s.invalid).map((s) => s.name);
+  log(`Пересобрано: ${dir}\n  рекомендаций: ${d.recs.length}, задач: ${t.length}${bad.length ? `\n  шаги не в счёт: ${bad.join('; ')}` : ''}`);
+  process.exit(0);
+}
 
 // --record: запись сценария — человек проходит оформление в открытом браузере, агент запоминает нажатия
 if (args.includes('--record')) {
@@ -141,7 +156,7 @@ let outDir = `${REPORTS}/${domain}/${STAMP}/checkout`;
 for (let i = 2; existsSync(outDir); i++) outDir = `${REPORTS}/${domain}/${STAMP}_${i}/checkout`;
 await mkdir(outDir, { recursive: true });
 const data = {
-  kind: 'checkout', site: siteName, device, profile: profile.label, startedAt, finishedAt: new Date(),
+  kind: 'checkout', site: siteName, device, profile: profile.label, conditions: conditionsOf(profile), startedAt, finishedAt: new Date(),
   product: sc.product, products: result.products ?? sc.products.map((url) => ({ url, title: '' })), removed: result.removed ?? [], productTitle: result.productTitle, login: result.method,
   delivery: actionText(sc.delivery), store: sc.store && !sc.address ? actionText(sc.store) : '', address: sc.address || '', payment: actionText(sc.payment), placeOrder: sc.placeOrder,
   order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes, popups: (result.popups || []).map(({ kind, button, text }) => ({ kind, button, text })),
@@ -153,7 +168,7 @@ await writeFile(`${outDir}/data.json`, JSON.stringify(data));
 await writeFile(`${outDir}/checkout_report.html`, renderCheckout(data, prev));
 // Задачи для разработки: что исправить, где, что сделать, когда готово
 const tasks = checkoutTasks(data);
-const tctx = { site: siteName, report: 'checkout_report.html', date: startedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), device: profile.label, kind: data.stoppedAt };
+const tctx = { site: siteName, report: 'checkout_report.html', date: startedAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), device: profile.label, kind: data.stoppedAt, conditions: conditionsOf(profile) };
 await writeFile(`${outDir}/tasks.html`, checkoutTasksHtml(tasks, tctx));
 await writeFile(`${outDir}/tasks.csv`, checkoutTasksCsv(tasks, tctx));
 
@@ -162,7 +177,7 @@ log(`\n${line}`);
 if (result.error) log(color('1;33', `⚠ Тест прерван на шаге «${result.stoppedAt}»: ${result.error}`));
 else if (result.stoppedAt === 'остановлено вручную') log(color('1;33', '⏹ Тест остановлен вручную'));
 else log(color('1;32', '✅ Тест оформления завершён'));
-const flow = data.steps.filter((s) => !/^(Главная страница|Форма входа|Отправка кода|Проверка кода|Проверка, что корзина пуста|Удаление других товаров|Карточка товара.* — первый заход)/.test(s.name) && !s.error);
+const flow = data.steps.filter((s) => !LOGIN_STEPS.test(s.name) && !s.error && !s.invalid);
 if (flow.length) {
   const slow = [...flow].sort((a, b) => b.dur - a.dur)[0];
   const tot = flow.reduce((a, s) => a + s.dur, 0), totFull = flow.reduce((a, s) => a + (s.full ?? s.dur), 0);
@@ -184,7 +199,8 @@ async function findPrevious(site, stamp) {
         const x = JSON.parse(await readFile(`${REPORTS}/${domainOf(site)}/${d}/checkout/data.json`, 'utf8'));
         // Сравниваем только с тестом того же сценария ([сайт] или [сайт: курьер]) на том же устройстве,
         // где оформление дошло хотя бы до карточки товара
-        if (x.site === site && x.device === device && x.steps?.some((s) => s.name.startsWith('Карточка товара') && !s.error)) return x;
+        // Проверку гостем (--check) сравниваем только с проверкой гостем, тест со входом — только с тестом со входом
+        if (x.site === site && x.device === device && !!x.check === check && x.steps?.some((s) => s.name.startsWith('Карточка товара') && !s.error)) return x;
       } catch {}
     }
   } catch {}
