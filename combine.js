@@ -6,16 +6,20 @@ import { renderCombined } from './lib/report.js';
 import { renderSummary } from './lib/summary.js';
 import { loadSettings, summaryEnabled, tasksEnabled } from './lib/settings.js';
 import { buildTasks, tasksCsv, tasksHtml } from './lib/tasks.js';
+import { reanalyze } from './lib/reanalyze.js';
 import { fileURLToPath } from 'node:url';
 
 const dirs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const runs = [];
 let site = '';
 for (const dir of dirs) {
-  const d = JSON.parse(await readFile(`${dir}/data.json`, 'utf8'));
+  const name = (d0 => d0.profileName ?? (/mobile\/?$/.test(dir) ? 'mobile' : 'desktop'));
+  const raw = JSON.parse(await readFile(`${dir}/data.json`, 'utf8'));
+  // Выводы пересчитываются по сохранённым замерам — так в отчёт попадают исправления агента
+  const d = reanalyze(raw, name(raw));
   site ||= d.site ?? '';
   runs.push({
-    name: d.profileName ?? (/mobile\/?$/.test(dir) ? 'mobile' : 'desktop'),
+    name: name(d),
     profile: { label: d.profile }, opts: d.opts, pages: d.pages, services: d.services, compare: d.compare, competitors: d.competitors, prodCompare: d.prodCompare,
     startedAt: new Date(d.startedAt ?? Date.now()), finishedAt: new Date(d.finishedAt ?? Date.now()),
   });

@@ -147,6 +147,10 @@ function loadJson(path) {
   return { jobs, internalNote: (config.internal ?? []).join(', ') };
 }
 opts.internalNote = internalNote;
+// Условия замера — в данных отчёта: по ним в выводах считается время скачивания и пишутся условия
+opts.network = profile.network ?? null;
+opts.cpu = profile.cpu ?? 1;
+opts.profileName = profileName;
 // Действия для теста отклика по сайтам (необязательный файл actions.txt рядом с pages.txt)
 const actionsConfig = loadActions(process.env.ACTIONS_FILE ?? `${PROJECT}/actions.txt`);
 // Тестовый контур: проверки, бессмысленные для закрытого от поиска сайта без посетителей, выключаются
@@ -516,11 +520,11 @@ for (const [site, entries] of bySite) {
   if (!combined) {
     await writeFile(`${dir}/${profileName}_report.html`, renderReport({ pages: sitePages, services, opts, profile, startedAt, finishedAt, compare, competitors, prodCompare }));
     if (opts.tasks) {
-      const list = buildTasks([{ name: profileName, pages: sitePages }]);
+      const list = buildTasks([{ name: profileName, opts, pages: sitePages }]);
       await writeFile(`${dir}/tasks.html`, tasksHtml(list, { site, report: `${profileName}_report.html`, startedAt }));
       await writeFile(`${dir}/tasks.csv`, tasksCsv(list, { site, report: `${profileName}_report.html` }));
     }
-    if (opts.summary) await writeFile(`${dir}/summary.html`, renderSummary([{ name: profileName, profile, pages: sitePages, compare, startedAt, competitors }], { site, fullReport: `${profileName}_report.html` }));
+    if (opts.summary) await writeFile(`${dir}/summary.html`, renderSummary([{ name: profileName, profile, opts, pages: sitePages, compare, startedAt, competitors }], { site, fullReport: `${profileName}_report.html` }));
   }
   await writeFile(`${dir}/data.json`, JSON.stringify({ site, opts, profile: profile.label, profileName, startedAt, finishedAt, compare, pages: sitePages, services, competitors, prodCompare }, null, 2));
   await writeFile(`${dir}/pages.csv`, csv([
