@@ -1,5 +1,5 @@
 // Тест скорости оформления заказа с входом по коду из SMS или письма.
-// Запуск: node checkout.js [checkout.txt] [--site=shop.example.com] [--mobile | --desktop] [--check | --no-order | --record] [--headless] [--timeout=45000]
+// Запуск: node checkout.js [checkout.txt] [--site=shop.example.com] [--mobile | --desktop] [--check | --no-order | --record] [--headless] [--no-cursor] [--timeout=45000]
 // ВНИМАНИЕ: без --no-order создаётся НАСТОЯЩИЙ заказ — отмените его после теста.
 import { chromium } from 'playwright';
 import { writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
@@ -123,7 +123,8 @@ const device = args.includes('--desktop') ? 'desktop' : args.includes('--mobile'
 const profile = PROFILES[device];
 // --check: проверка сценария гостем — без входа и без заказа (проверить, что кнопки из checkout.txt находятся на сайте)
 const check = args.includes('--check');
-const opts = { timeout: Number(flag('timeout') ?? 45000), noOrder: check || args.includes('--no-order'), check };
+// Курсор и подсветка нажатий в окне браузера — когда окно видно (без --headless); выключить: --no-cursor
+const opts = { timeout: Number(flag('timeout') ?? 45000), noOrder: check || args.includes('--no-order'), check, cursor: args.includes('--cursor') || (!args.includes('--headless') && !args.includes('--no-cursor')) };
 
 log(`\n${color('1', `Тест оформления заказа: ${siteName}`)} · ${profile.label}`);
 log(sc.products.length > 1 ? `Товары (${sc.products.length}):\n${sc.products.map((u) => `  • ${u}`).join('\n')}` : `Товар: ${sc.product}`);
