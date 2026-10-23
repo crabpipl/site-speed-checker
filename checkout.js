@@ -163,6 +163,10 @@ const data = {
   order: result.order, error: result.error, stoppedAt: check && !result.error ? 'проверка сценария' : result.stoppedAt, check, loggedOut: result.loggedOut, notes: result.notes, popups: (result.popups || []).map(({ kind, button, text }) => ({ kind, button, text })),
   steps: result.steps,
 };
+if (result.errorShot) {
+  data.errorShot = { n: result.errorShot.n, file: `error-step${result.errorShot.n}.jpg` };
+  await writeFile(`${outDir}/${data.errorShot.file}`, result.errorShot.buf);
+}
 data.recs = checkoutRecs(data.steps, data.order);
 const prev = await findPrevious(siteName, STAMP);
 await writeFile(`${outDir}/data.json`, JSON.stringify(data));
